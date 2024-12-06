@@ -1,55 +1,48 @@
 pipeline {
-    environment {
-        imagename = "lomesh2008daheria/javaapp-k8s"
-        dockerImage = ''
-        registryCredentials = 'dockerhub'
-    }
     agent any
+
     tools {
         maven "MVN3"
         dockerTool "docker"
     }
-    
     stages {
-        stage("pullscm") {
+        stage('pullscm') {
             steps {
                 git credentialsId: 'GIT', url: 'git@github.com:LomeshDaheria/javaapp-kuber.git'
             }
         }
-        stage("build") {
+        stage('build') {
             steps {
                 sh "mvn -f kubernetes-java clean install"
             }
         }
-        stage("Build Docker Image") {
+        stage('build docker image') {
             steps {
                 script {
-                    dockerImage = docker.build("$imagename","kubernetes-java")
+                    dockerImage = docker.build("lomesh2008daheria/javaapp-k8s","kubernetes-java")
                 }
             }
         }
-        stage("push Docker image") {
+        stage('Push docker image') {
             steps {
                 script {
-                    docker.withRegistry( '', registryCredentials ) {
-                        dockerImage.push("$BUILD_NUMBER")
-                        dockerImage.push('latest')
+                    docker.withRegistry( '', 'dockerhub') {
+                        dockerImage.push ("$BUILD_NUMBER")
                     }
                 }
             }
         }
-        stage(Removeunusedimages) {
+        stage ('Kube Deployment') {
             steps {
-                sh "docker rmi $imagename:$BUILD_NUMBER"
-                sh "docker rmi $imagename"
-            }
-        }
-        stage("kubedeployment") {
-            steps {
-                sh "sed -i s/latest/$BUILD_NUMBER/g kubernetes-java/deploy.yml"
-                sh "sudo kubectl apply -f kubernetes-java/deploy.yml"
+                script {
+                    withKubeConfig([credentialsId: 'jenkins-aks']) {
+                        sh "sed -i s/latest/$BUILD_NUMBER/g kubernetes-java/deploy.yml"
+                        sh "kubectl apply -f kubernetes-java/deploy.yml"
+                        sh "sleep 10 && kubectl get svc"
+                    }
+                }
             }
         }
     }
-
 }
+has context menu
